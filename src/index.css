@@ -13,3 +13,19 @@ body {
 .font-mono {
   font-family: "IBM Plex Mono", monospace;
 }
+
+/* Cetak struk - diformat untuk kertas thermal 58mm */
+@media print {
+  @page {
+    size: 58mm auto;
+    margin: 0;
+  }
+  body {
+    background: white;
+  }
+  #receipt-print-area {
+    width: 58mm;
+    padding: 4mm;
+  }
+}
+
