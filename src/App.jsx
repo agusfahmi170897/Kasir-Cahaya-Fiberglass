@@ -28,11 +28,11 @@ import { supabase } from "./supabaseClient";
 // (contoh: public/products/bulat-30-1p.jpg). Kalau foto belum ada, otomatis tampil ikon placeholder.
 function buildProducts() {
   const specs = [
-    { bentuk: "Bulat", liter: 30, pilahMin: 1, pilahMax: 3, cat: "Bulat" },
-    { bentuk: "Bulat", liter: 50, pilahMin: 1, pilahMax: 5, cat: "Bulat" },
-    { bentuk: "Bulat", liter: 80, pilahMin: 1, pilahMax: 5, cat: "Bulat" },
-    { bentuk: "Oval", liter: 60, pilahMin: 1, pilahMax: 5, cat: "Oval" },
-    { bentuk: "Kaleng", liter: 20, pilahMin: 2, pilahMax: 3, cat: "Kaleng" },
+    { bentuk: "Bulat", liter: 30, pilahMin: 1, pilahMax: 3, cat: "Bulat 30L" },
+    { bentuk: "Bulat", liter: 50, pilahMin: 1, pilahMax: 5, cat: "Bulat 50L" },
+    { bentuk: "Bulat", liter: 80, pilahMin: 1, pilahMax: 5, cat: "Bulat 80L" },
+    { bentuk: "Oval", liter: 60, pilahMin: 1, pilahMax: 5, cat: "Oval 60L" },
+    { bentuk: "Kaleng", liter: 20, pilahMin: 2, pilahMax: 3, cat: "Kaleng 20L" },
   ];
   let id = 1;
   const list = [];
@@ -52,7 +52,7 @@ function buildProducts() {
   return list;
 }
 
-const CATEGORIES = ["Semua", "Bulat", "Oval", "Kaleng"];
+const CATEGORIES = ["Semua", "Bulat 30L", "Bulat 50L", "Bulat 80L", "Oval 60L", "Kaleng 20L"];
 const PRODUCTS = buildProducts();
 
 function rupiah(n) {
@@ -264,6 +264,11 @@ export default function App() {
   const change = cash - total;
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
+  function getQtyInCart(id) {
+    const item = cart.find((i) => i.id === id);
+    return item ? item.qty : 0;
+  }
+
   function addToCart(product) {
     setCart((prev) => {
       const existing = prev.find((i) => i.id === product.id);
@@ -272,7 +277,6 @@ export default function App() {
       }
       return [...prev, { id: product.id, name: product.name, price: product.price, qty: 1, image: product.image }];
     });
-    setShowCartDrawer(true);
   }
 
   function changeQty(id, delta) {
@@ -338,7 +342,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen w-full bg-[#F1EEE6] text-[#231F1A]">
-      <header className="flex items-center justify-between px-6 py-4 bg-[#1F3D34] text-[#F1EEE6] shadow-sm print:hidden">
+      <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-4 bg-[#1F3D34] text-[#F1EEE6] shadow-sm print:hidden">
         <div className="flex items-center gap-3">
           <StoreLogo className="w-9 h-9 rounded-md shrink-0" />
           <div>
@@ -399,28 +403,55 @@ export default function App() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {filtered.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => addToCart(p)}
-              className="text-left bg-white rounded-xl border border-[#E4DECD] overflow-hidden hover:border-[#1F3D34] hover:shadow-md transition-all active:scale-[0.97]"
-            >
-              <ProductThumb src={p.image} alt={p.name} className="w-full h-24 object-cover" />
-              <div className="p-3">
-                <div className="text-sm font-medium leading-snug mb-1">{p.name}</div>
-                <div className="flex items-center justify-between mt-2">
-                  {p.price > 0 ? (
-                    <span className="text-sm font-semibold text-[#1F3D34] font-mono">{rupiah(p.price)}</span>
+          {filtered.map((p) => {
+            const qty = getQtyInCart(p.id);
+            return (
+              <div
+                key={p.id}
+                className="text-left bg-white rounded-xl border border-[#E4DECD] overflow-hidden hover:border-[#1F3D34] hover:shadow-md transition-all"
+              >
+                <ProductThumb src={p.image} alt={p.name} className="w-full h-24 object-cover" />
+                <div className="p-3">
+                  <div className="text-sm font-medium leading-snug mb-1">{p.name}</div>
+                  <div className="flex items-center justify-between mt-2 mb-2.5">
+                    {p.price > 0 ? (
+                      <span className="text-sm font-semibold text-[#1F3D34] font-mono">{rupiah(p.price)}</span>
+                    ) : (
+                      <span className="text-xs font-medium text-[#E8A33D]">Harga menyusul</span>
+                    )}
+                    <span className="text-[10px] text-[#B3AC98] flex items-center gap-1">
+                      <Layers size={10} /> {p.pilah} Pilah
+                    </span>
+                  </div>
+
+                  {qty === 0 ? (
+                    <button
+                      onClick={() => addToCart(p)}
+                      className="w-full py-1.5 rounded-md bg-[#1F3D34] text-white text-xs font-semibold flex items-center justify-center gap-1 hover:brightness-110"
+                    >
+                      <Plus size={12} /> Tambah
+                    </button>
                   ) : (
-                    <span className="text-xs font-medium text-[#E8A33D]">Harga menyusul</span>
+                    <div className="flex items-center justify-between bg-[#F1EEE6] rounded-md px-1 py-1">
+                      <button
+                        onClick={() => changeQty(p.id, -1)}
+                        className="w-7 h-7 rounded-md bg-white hover:bg-[#E4DECD] flex items-center justify-center shadow-sm"
+                      >
+                        <Minus size={13} />
+                      </button>
+                      <span className="text-sm font-bold text-[#1F3D34]">{qty}</span>
+                      <button
+                        onClick={() => addToCart(p)}
+                        className="w-7 h-7 rounded-md bg-white hover:bg-[#E4DECD] flex items-center justify-center shadow-sm"
+                      >
+                        <Plus size={13} />
+                      </button>
+                    </div>
                   )}
-                  <span className="text-[10px] text-[#B3AC98] flex items-center gap-1">
-                    <Layers size={10} /> {p.pilah} Pilah
-                  </span>
                 </div>
               </div>
-            </button>
-          ))}
+            );
+          })}
           {filtered.length === 0 && (
             <div className="col-span-full text-center py-16 text-[#8B8680] text-sm">Produk tidak ditemukan.</div>
           )}
