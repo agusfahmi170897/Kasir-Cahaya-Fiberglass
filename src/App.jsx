@@ -12,7 +12,12 @@ import {
   Clock,
   History,
   Loader2,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { supabase } from "./supabaseClient";
 
 const CATEGORIES = ["Semua", "Cetak Body", "Tangki & Wadah", "Reparasi", "Custom & Molding"];
@@ -78,7 +83,69 @@ export default function App() {
     setLoadingHistory(false);
   }
 
-  const filtered = useMemo(() => {
+  function exportExcel() {
+    const rows = history.map((h) => ({
+      "No Struk": h.no_struk,
+      Tanggal: new Date(h.created_at).toLocaleString("id-ID"),
+      Jasa: h.items.map((i) => `${i.name} x${i.qty}`).join(", "),
+      Subtotal: h.subtotal,
+      "Diskon (%)": h.discount_pct,
+      Total: h.total,
+      "Metode Bayar": h.metode_bayar === "tunai" ? "Tunai" : "QRIS",
+      "Uang Diterima": h.cash,
+      Kembalian: h.kembalian,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [
+      { wch: 10 },
+      { wch: 20 },
+      { wch: 45 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 12 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Transaksi");
+    const namaFile = `transaksi-cpf-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, namaFile);
+  }
+
+  function exportPDF() {
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text("Cahaya Putra Fiberglass - Riwayat Transaksi", 14, 15);
+    doc.setFontSize(9);
+    doc.text(`Dicetak: ${new Date().toLocaleString("id-ID")}`, 14, 21);
+
+    const body = history.map((h) => [
+      String(h.no_struk).padStart(4, "0"),
+      new Date(h.created_at).toLocaleString("id-ID"),
+      h.items.map((i) => `${i.name} x${i.qty}`).join("\n"),
+      rupiah(h.total),
+      h.metode_bayar === "tunai" ? "Tunai" : "QRIS",
+    ]);
+
+    autoTable(doc, {
+      startY: 27,
+      head: [["No Struk", "Tanggal", "Jasa", "Total", "Bayar"]],
+      body,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [31, 61, 52] },
+      columnStyles: { 2: { cellWidth: 70 } },
+    });
+
+    const totalOmzet = history.reduce((s, h) => s + Number(h.total), 0);
+    const finalY = doc.lastAutoTable.finalY || 30;
+    doc.setFontSize(10);
+    doc.text(`Total Omzet Keseluruhan: ${rupiah(totalOmzet)}`, 14, finalY + 8);
+
+    doc.save(`transaksi-cpf-${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
+
+
     return PRODUCTS.filter(
       (p) =>
         (activeCat === "Semua" || p.cat === activeCat) &&
@@ -497,9 +564,29 @@ export default function App() {
           <div className="bg-white rounded-xl w-full max-w-md p-5 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-bold text-lg font-display">Riwayat Transaksi</h2>
-              <button onClick={() => setShowHistory(false)}>
-                <X size={18} className="text-[#8B8680]" />
-              </button>
+              <div className="flex items-center gap-2">
+                {history.length > 0 && (
+                  <>
+                    <button
+                      onClick={exportExcel}
+                      title="Export Excel"
+                      className="flex items-center gap-1 text-xs bg-[#EAF1EE] text-[#1F3D34] px-2.5 py-1.5 rounded-md hover:bg-[#DCEAE3]"
+                    >
+                      <FileSpreadsheet size={14} /> Excel
+                    </button>
+                    <button
+                      onClick={exportPDF}
+                      title="Export PDF"
+                      className="flex items-center gap-1 text-xs bg-[#FBEAE8] text-[#C1443A] px-2.5 py-1.5 rounded-md hover:bg-[#F8DCD9]"
+                    >
+                      <FileText size={14} /> PDF
+                    </button>
+                  </>
+                )}
+                <button onClick={() => setShowHistory(false)}>
+                  <X size={18} className="text-[#8B8680]" />
+                </button>
+              </div>
             </div>
 
             {(() => {
