@@ -145,7 +145,8 @@ export default function App() {
     doc.save(`transaksi-cpf-${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
-
+  // PERBAIKAN: Menambahkan useMemo untuk filter produk
+  const filtered = useMemo(() => {
     return PRODUCTS.filter(
       (p) =>
         (activeCat === "Semua" || p.cat === activeCat) &&
