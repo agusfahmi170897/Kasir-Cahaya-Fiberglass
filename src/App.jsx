@@ -169,6 +169,10 @@ export default function App() {
   const [payMethod, setPayMethod] = useState("tunai");
   const [cashInput, setCashInput] = useState("");
   const [showCartDrawer, setShowCartDrawer] = useState(false);
+  const [showManualAdd, setShowManualAdd] = useState(false);
+  const [manualName, setManualName] = useState("");
+  const [manualPrice, setManualPrice] = useState("");
+  const [manualQty, setManualQty] = useState("1");
   const [showPay, setShowPay] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastTx, setLastTx] = useState(null);
@@ -292,6 +296,19 @@ export default function App() {
 
   function removeItem(id) {
     setCart((prev) => prev.filter((i) => i.id !== id));
+  }
+
+  function addManualItem() {
+    const name = manualName.trim();
+    const price = parseFloat(manualPrice.replace(/[^0-9]/g, "")) || 0;
+    const qty = parseInt(manualQty, 10) || 1;
+    if (!name) return;
+    const manualId = `manual-${Date.now()}`;
+    setCart((prev) => [...prev, { id: manualId, name, price, qty, image: null }]);
+    setManualName("");
+    setManualPrice("");
+    setManualQty("1");
+    setShowManualAdd(false);
   }
 
   function resetTransaction() {
@@ -468,6 +485,12 @@ export default function App() {
                 <span className="font-semibold text-sm font-display">Struk #{String(txCounter).padStart(4, "0")}</span>
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowManualAdd(true)}
+                  className="text-xs text-[#1F3D34] font-semibold hover:underline"
+                >
+                  + Manual
+                </button>
                 {cart.length > 0 && (
                   <button onClick={() => setCart([])} className="text-xs text-[#C1443A] hover:underline">
                     Kosongkan
@@ -489,7 +512,13 @@ export default function App() {
               ) : (
                 cart.map((item) => (
                   <div key={item.id} className="py-2.5 flex items-center gap-2">
-                    <ProductThumb src={item.image} alt={item.name} className="w-10 h-10 rounded-md object-cover shrink-0" />
+                    {String(item.id).startsWith("manual-") ? (
+                      <div className="w-10 h-10 rounded-md bg-[#EAF1EE] text-[#1F3D34] text-[9px] font-bold flex items-center justify-center shrink-0">
+                        MANUAL
+                      </div>
+                    ) : (
+                      <ProductThumb src={item.image} alt={item.name} className="w-10 h-10 rounded-md object-cover shrink-0" />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{item.name}</div>
                       <div className="flex items-center gap-1 mt-1">
@@ -561,6 +590,59 @@ export default function App() {
                 Bayar {cart.length > 0 ? rupiah(total) : ""}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tambah Item Manual */}
+      {showManualAdd && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 print:hidden">
+          <div className="bg-white rounded-xl w-full max-w-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-lg font-display">Tambah Item Manual</h2>
+              <button onClick={() => setShowManualAdd(false)}>
+                <X size={18} className="text-[#8B8680]" />
+              </button>
+            </div>
+
+            <label className="text-xs text-[#8B8680] mb-1 block">Nama Item</label>
+            <input
+              autoFocus
+              value={manualName}
+              onChange={(e) => setManualName(e.target.value)}
+              placeholder="Contoh: Ongkos Kirim, Jasa Pasang, dll"
+              className="w-full border border-[#DDD6C4] rounded-lg px-3 py-2.5 text-sm mb-3"
+            />
+
+            <div className="flex gap-2 mb-4">
+              <div className="flex-1">
+                <label className="text-xs text-[#8B8680] mb-1 block">Harga</label>
+                <input
+                  value={manualPrice}
+                  onChange={(e) => setManualPrice(e.target.value)}
+                  placeholder="0"
+                  inputMode="numeric"
+                  className="w-full border border-[#DDD6C4] rounded-lg px-3 py-2.5 text-sm font-mono"
+                />
+              </div>
+              <div className="w-20">
+                <label className="text-xs text-[#8B8680] mb-1 block">Qty</label>
+                <input
+                  value={manualQty}
+                  onChange={(e) => setManualQty(e.target.value.replace(/[^0-9]/g, ""))}
+                  inputMode="numeric"
+                  className="w-full border border-[#DDD6C4] rounded-lg px-3 py-2.5 text-sm font-mono text-center"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={addManualItem}
+              disabled={!manualName.trim()}
+              className="w-full py-3 rounded-lg bg-[#1F3D34] text-white font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed font-display"
+            >
+              Tambahkan ke Struk
+            </button>
           </div>
         </div>
       )}
