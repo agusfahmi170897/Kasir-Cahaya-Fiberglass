@@ -289,6 +289,27 @@ export default function App() {
     );
   }
 
+  function setExactQty(product, value) {
+    const num = parseInt(String(value).replace(/[^0-9]/g, ""), 10);
+    const qty = isNaN(num) ? 0 : num;
+    setCart((prev) => {
+      const existing = prev.find((i) => i.id === product.id);
+      if (qty <= 0) {
+        return prev.filter((i) => i.id !== product.id);
+      }
+      if (existing) {
+        return prev.map((i) => (i.id === product.id ? { ...i, qty } : i));
+      }
+      return [...prev, { id: product.id, name: product.name, price: product.price, qty, image: product.image }];
+    });
+  }
+
+  function setItemQty(id, value) {
+    const num = parseInt(String(value).replace(/[^0-9]/g, ""), 10);
+    const qty = isNaN(num) ? 0 : num;
+    setCart((prev) => (qty <= 0 ? prev.filter((i) => i.id !== id) : prev.map((i) => (i.id === id ? { ...i, qty } : i))));
+  }
+
   function setItemPrice(id, value) {
     const num = parseFloat(String(value).replace(/[^0-9]/g, "")) || 0;
     setCart((prev) => prev.map((i) => (i.id === id ? { ...i, price: num } : i)));
@@ -456,7 +477,13 @@ export default function App() {
                       >
                         <Minus size={13} />
                       </button>
-                      <span className="text-sm font-bold text-[#1F3D34]">{qty}</span>
+                      <input
+                        value={qty}
+                        onChange={(e) => setExactQty(p, e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        inputMode="numeric"
+                        className="w-8 text-center text-sm font-bold text-[#1F3D34] bg-transparent outline-none"
+                      />
                       <button
                         onClick={() => addToCart(p)}
                         className="w-7 h-7 rounded-md bg-white hover:bg-[#E4DECD] flex items-center justify-center shadow-sm"
@@ -540,7 +567,13 @@ export default function App() {
                       >
                         <Minus size={12} />
                       </button>
-                      <span className="w-5 text-center text-sm font-medium">{item.qty}</span>
+                      <input
+                        value={item.qty}
+                        onChange={(e) => setItemQty(item.id, e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        inputMode="numeric"
+                        className="w-7 text-center text-sm font-medium bg-transparent outline-none"
+                      />
                       <button
                         onClick={() => changeQty(item.id, 1)}
                         className="w-6 h-6 rounded-md bg-[#F1EEE6] hover:bg-[#E4DECD] flex items-center justify-center"
