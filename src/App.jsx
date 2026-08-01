@@ -146,15 +146,53 @@ function ReceiptBody({ tx }) {
         <span>{rupiah(tx.total)}</span>
       </div>
       <div className="border-t border-dashed border-[#D8D0BA] my-2" />
-      <div className="flex justify-between text-xs">
-        <span>{tx.metode_bayar === "tunai" ? "Tunai" : "QRIS"}</span>
-        <span>{rupiah(tx.cash)}</span>
-      </div>
-      {tx.metode_bayar === "tunai" && (
-        <div className="flex justify-between text-xs">
-          <span>Kembali</span>
-          <span>{rupiah(tx.kembalian)}</span>
-        </div>
+      {tx.status === "dp" ? (
+        <>
+          <div className="text-center text-xs font-bold bg-[#FBEEDB] text-[#B4790C] py-1 rounded mb-2">
+            ● TANDA JADI / DP
+          </div>
+          <div className="flex justify-between text-xs">
+            <span>{tx.metode_bayar === "tunai" ? "Uang Muka (Tunai)" : "Uang Muka (QRIS)"}</span>
+            <span>{rupiah(tx.dp_amount)}</span>
+          </div>
+          <div className="flex justify-between text-sm font-bold mt-1 text-[#C1443A]">
+            <span>SISA TAGIHAN</span>
+            <span>{rupiah(tx.sisa_bayar)}</span>
+          </div>
+        </>
+      ) : tx.dp_amount > 0 ? (
+        <>
+          <div className="text-center text-xs font-bold bg-[#EAF1EE] text-[#1F3D34] py-1 rounded mb-2">
+            ● LUNAS (Pelunasan DP)
+          </div>
+          <div className="flex justify-between text-xs">
+            <span>Uang Muka Sebelumnya</span>
+            <span>{rupiah(tx.dp_amount)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span>Pelunasan ({tx.metode_bayar === "tunai" ? "Tunai" : "QRIS"})</span>
+            <span>{rupiah(tx.total - tx.dp_amount)}</span>
+          </div>
+          {tx.kembalian > 0 && (
+            <div className="flex justify-between text-xs">
+              <span>Kembali</span>
+              <span>{rupiah(tx.kembalian)}</span>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="flex justify-between text-xs">
+            <span>{tx.metode_bayar === "tunai" ? "Tunai" : "QRIS"}</span>
+            <span>{rupiah(tx.cash)}</span>
+          </div>
+          {tx.metode_bayar === "tunai" && (
+            <div className="flex justify-between text-xs">
+              <span>Kembali</span>
+              <span>{rupiah(tx.kembalian)}</span>
+            </div>
+          )}
+        </>
       )}
       <div className="text-center text-[10px] text-[#8B8680] mt-4">Terima kasih atas kepercayaannya!</div>
     </div>
@@ -168,6 +206,12 @@ export default function App() {
   const [discountPct, setDiscountPct] = useState(0);
   const [payMethod, setPayMethod] = useState("tunai");
   const [cashInput, setCashInput] = useState("");
+  const [paymentType, setPaymentType] = useState("penuh"); // "penuh" | "dp"
+  const [dpInput, setDpInput] = useState("");
+  const [settlingTx, setSettlingTx] = useState(null);
+  const [settleMethod, setSettleMethod] = useState("tunai");
+  const [settleCashInput, setSettleCashInput] = useState("");
+  const [settling, setSettling] = useState(false);
   const [showCartDrawer, setShowCartDrawer] = useState(false);
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [manualName, setManualName] = useState("");
@@ -213,6 +257,8 @@ export default function App() {
       Subtotal: h.subtotal,
       "Diskon (%)": h.discount_pct,
       Total: h.total,
+      Status: h.status === "dp" ? "DP / Belum Lunas" : "Lunas",
+      "Sisa Tagihan": h.status === "dp" ? h.sisa_bayar : 0,
       "Metode Bayar": h.metode_bayar === "tunai" ? "Tunai" : "QRIS",
       "Uang Diterima": h.cash,
       Kembalian: h.kembalian,
@@ -220,7 +266,7 @@ export default function App() {
     const ws = XLSX.utils.json_to_sheet(rows);
     ws["!cols"] = [
       { wch: 10 }, { wch: 20 }, { wch: 45 }, { wch: 12 },
-      { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 },
+      { wch: 10 }, { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 12 },
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Transaksi");
@@ -238,15 +284,16 @@ export default function App() {
       new Date(h.created_at).toLocaleString("id-ID"),
       h.items.map((i) => `${i.name} x${i.qty}`).join("\n"),
       rupiah(h.total),
+      h.status === "dp" ? `DP (Sisa ${rupiah(h.sisa_bayar)})` : "Lunas",
       h.metode_bayar === "tunai" ? "Tunai" : "QRIS",
     ]);
     autoTable(doc, {
       startY: 27,
-      head: [["No Struk", "Tanggal", "Jasa", "Total", "Bayar"]],
+      head: [["No Struk", "Tanggal", "Jasa", "Total", "Status", "Bayar"]],
       body,
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [31, 61, 52] },
-      columnStyles: { 2: { cellWidth: 70 } },
+      columnStyles: { 2: { cellWidth: 60 } },
     });
     const totalOmzet = history.reduce((s, h) => s + Number(h.total), 0);
     const finalY = doc.lastAutoTable.finalY || 30;
@@ -266,6 +313,8 @@ export default function App() {
   const total = subtotal - discountAmt;
   const cash = parseFloat(cashInput.replace(/[^0-9]/g, "")) || 0;
   const change = cash - total;
+  const dpAmount = parseFloat(dpInput.replace(/[^0-9]/g, "")) || 0;
+  const sisaSetelahDp = total - dpAmount;
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
   function getQtyInCart(id) {
@@ -337,11 +386,18 @@ export default function App() {
     setDiscountPct(0);
     setCashInput("");
     setPayMethod("tunai");
+    setPaymentType("penuh");
+    setDpInput("");
     setShowPay(false);
   }
 
   async function confirmPayment() {
-    if (payMethod === "tunai" && cash < total) return;
+    const isDp = paymentType === "dp";
+    if (isDp) {
+      if (dpAmount <= 0 || dpAmount >= total) return;
+    } else if (payMethod === "tunai" && cash < total) {
+      return;
+    }
     setSaving(true);
     setErrorMsg("");
     const row = {
@@ -352,8 +408,11 @@ export default function App() {
       discount_amt: discountAmt,
       total,
       metode_bayar: payMethod,
-      cash: payMethod === "tunai" ? cash : total,
-      kembalian: payMethod === "tunai" ? change : 0,
+      cash: isDp ? dpAmount : payMethod === "tunai" ? cash : total,
+      kembalian: isDp ? 0 : payMethod === "tunai" ? change : 0,
+      status: isDp ? "dp" : "lunas",
+      dp_amount: isDp ? dpAmount : 0,
+      sisa_bayar: isDp ? sisaSetelahDp : 0,
     };
     const { data, error } = await supabase.from("transaksi").insert(row).select().single();
     setSaving(false);
@@ -376,6 +435,44 @@ export default function App() {
 
   function printReceipt() {
     window.print();
+  }
+
+  function openSettle(tx) {
+    setSettlingTx(tx);
+    setSettleMethod("tunai");
+    setSettleCashInput(String(tx.sisa_bayar));
+    setShowHistory(false);
+  }
+
+  const settleCash = parseFloat(settleCashInput.replace(/[^0-9]/g, "")) || 0;
+  const settleChange = settlingTx ? settleCash - settlingTx.sisa_bayar : 0;
+
+  async function confirmSettle() {
+    if (!settlingTx) return;
+    if (settleMethod === "tunai" && settleCash < settlingTx.sisa_bayar) return;
+    setSettling(true);
+    setErrorMsg("");
+    const updates = {
+      status: "lunas",
+      metode_bayar: settleMethod,
+      cash: settlingTx.dp_amount + settlingTx.sisa_bayar,
+      kembalian: settleMethod === "tunai" ? settleChange : 0,
+      sisa_bayar: 0,
+    };
+    const { data, error } = await supabase
+      .from("transaksi")
+      .update(updates)
+      .eq("id", settlingTx.id)
+      .select()
+      .single();
+    setSettling(false);
+    if (error) {
+      setErrorMsg("Gagal menyimpan pelunasan: " + error.message);
+      return;
+    }
+    setHistory((prev) => prev.map((h) => (h.id === data.id ? data : h)));
+    setSettlingTx(null);
+    setViewingTx(data);
   }
 
   return (
@@ -695,6 +792,25 @@ export default function App() {
               <span className="text-[#1F3D34] text-2xl font-bold font-mono">{rupiah(total)}</span>
             </div>
 
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <button
+                onClick={() => setPaymentType("penuh")}
+                className={`py-2 rounded-lg border text-sm font-semibold ${
+                  paymentType === "penuh" ? "border-[#1F3D34] bg-[#EAF1EE] text-[#1F3D34]" : "border-[#DDD6C4] text-[#5B5648]"
+                }`}
+              >
+                Bayar Penuh
+              </button>
+              <button
+                onClick={() => setPaymentType("dp")}
+                className={`py-2 rounded-lg border text-sm font-semibold ${
+                  paymentType === "dp" ? "border-[#E8A33D] bg-[#FBEEDB] text-[#B4790C]" : "border-[#DDD6C4] text-[#5B5648]"
+                }`}
+              >
+                Uang Muka / DP
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 gap-2 mb-4">
               <button
                 onClick={() => setPayMethod("tunai")}
@@ -714,7 +830,41 @@ export default function App() {
               </button>
             </div>
 
-            {payMethod === "tunai" ? (
+            {paymentType === "dp" ? (
+              <>
+                <label className="text-xs text-[#8B8680] mb-1 block">Jumlah Uang Muka Diterima</label>
+                <input
+                  autoFocus
+                  value={dpInput}
+                  onChange={(e) => setDpInput(e.target.value)}
+                  placeholder="0"
+                  inputMode="numeric"
+                  className="w-full border border-[#DDD6C4] rounded-lg px-3 py-2.5 text-lg font-semibold mb-2 font-mono"
+                />
+                <div className="flex gap-1.5 mb-3 flex-wrap">
+                  {[0.3, 0.5, 0.7].map((pct) => (
+                    <button
+                      key={pct}
+                      onClick={() => setDpInput(String(Math.round(total * pct)))}
+                      className="px-2.5 py-1 rounded-md bg-[#F1EEE6] text-xs font-medium hover:bg-[#E4DECD]"
+                    >
+                      {pct * 100}% ({rupiah(total * pct)})
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between text-sm mb-4 px-1">
+                  <span className="text-[#5B5648]">Sisa Tagihan</span>
+                  <span className={`font-bold font-mono ${sisaSetelahDp <= 0 ? "text-[#C1443A]" : "text-[#1F3D34]"}`}>
+                    {rupiah(sisaSetelahDp)}
+                  </span>
+                </div>
+                {dpAmount > 0 && dpAmount >= total && (
+                  <p className="text-xs text-[#C1443A] mb-3 -mt-2">
+                    Jumlah DP tidak boleh sama/lebih dari total. Pakai "Bayar Penuh" kalau lunas.
+                  </p>
+                )}
+              </>
+            ) : payMethod === "tunai" ? (
               <>
                 <label className="text-xs text-[#8B8680] mb-1 block">Uang diterima</label>
                 <input
@@ -756,11 +906,16 @@ export default function App() {
 
             <button
               onClick={confirmPayment}
-              disabled={saving || (payMethod === "tunai" && cash < total)}
+              disabled={
+                saving ||
+                (paymentType === "dp"
+                  ? dpAmount <= 0 || dpAmount >= total
+                  : payMethod === "tunai" && cash < total)
+              }
               className="w-full py-3 rounded-lg bg-[#1F3D34] text-white font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-display"
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-              {saving ? "Menyimpan..." : "Konfirmasi Pembayaran"}
+              {saving ? "Menyimpan..." : paymentType === "dp" ? "Simpan Uang Muka" : "Konfirmasi Pembayaran"}
             </button>
           </div>
         </div>
@@ -808,6 +963,103 @@ export default function App() {
                 Tutup
               </button>
             </div>
+            {viewingTx.status === "dp" && (
+              <div className="px-5 pb-5 print:hidden">
+                <button
+                  onClick={() => {
+                    openSettle(viewingTx);
+                    setViewingTx(null);
+                  }}
+                  className="w-full py-2.5 rounded-lg bg-[#E8A33D] text-[#1F3D34] font-bold text-sm"
+                >
+                  Lunasi Sekarang
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pelunasan DP */}
+      {settlingTx && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 print:hidden">
+          <div className="bg-white rounded-xl w-full max-w-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-lg font-display">Pelunasan Struk #{String(settlingTx.no_struk).padStart(4, "0")}</h2>
+              <button onClick={() => setSettlingTx(null)}>
+                <X size={18} className="text-[#8B8680]" />
+              </button>
+            </div>
+
+            <div className="bg-[#F1EEE6] rounded-lg px-3 py-2 mb-4 space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#5B5648]">Total Tagihan</span>
+                <span className="font-mono">{rupiah(settlingTx.total)}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#5B5648]">Uang Muka Sudah Dibayar</span>
+                <span className="font-mono">{rupiah(settlingTx.dp_amount)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm font-bold">
+                <span>Sisa yang Harus Dibayar</span>
+                <span className="text-[#C1443A] font-mono">{rupiah(settlingTx.sisa_bayar)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button
+                onClick={() => setSettleMethod("tunai")}
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium ${
+                  settleMethod === "tunai" ? "border-[#1F3D34] bg-[#EAF1EE] text-[#1F3D34]" : "border-[#DDD6C4] text-[#5B5648]"
+                }`}
+              >
+                <Banknote size={16} /> Tunai
+              </button>
+              <button
+                onClick={() => setSettleMethod("qris")}
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium ${
+                  settleMethod === "qris" ? "border-[#1F3D34] bg-[#EAF1EE] text-[#1F3D34]" : "border-[#DDD6C4] text-[#5B5648]"
+                }`}
+              >
+                <QrCode size={16} /> QRIS
+              </button>
+            </div>
+
+            {settleMethod === "tunai" ? (
+              <>
+                <label className="text-xs text-[#8B8680] mb-1 block">Uang diterima</label>
+                <input
+                  autoFocus
+                  value={settleCashInput}
+                  onChange={(e) => setSettleCashInput(e.target.value)}
+                  placeholder="0"
+                  inputMode="numeric"
+                  className="w-full border border-[#DDD6C4] rounded-lg px-3 py-2.5 text-lg font-semibold mb-2 font-mono"
+                />
+                <div className="flex items-center justify-between text-sm mb-4 px-1">
+                  <span className="text-[#5B5648]">Kembalian</span>
+                  <span className={`font-bold font-mono ${settleChange < 0 ? "text-[#C1443A]" : "text-[#1F3D34]"}`}>
+                    {settleChange < 0 ? "Kurang " + rupiah(-settleChange) : rupiah(settleChange)}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center py-4 mb-3 bg-[#F7F5EE] rounded-lg">
+                <div className="w-32 h-32 bg-white border border-[#DDD6C4] rounded-lg flex items-center justify-center mb-2">
+                  <QrCode size={64} className="text-[#231F1A]" />
+                </div>
+                <p className="text-xs text-[#8B8680]">Pindai untuk membayar {rupiah(settlingTx.sisa_bayar)}</p>
+              </div>
+            )}
+
+            <button
+              onClick={confirmSettle}
+              disabled={settling || (settleMethod === "tunai" && settleCash < settlingTx.sisa_bayar)}
+              className="w-full py-3 rounded-lg bg-[#1F3D34] text-white font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-display"
+            >
+              {settling ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+              {settling ? "Menyimpan..." : "Konfirmasi Pelunasan"}
+            </button>
           </div>
         </div>
       )}
@@ -867,25 +1119,44 @@ export default function App() {
                 <div className="text-center py-10 text-[#B3AC98] text-sm">Belum ada transaksi tersimpan.</div>
               ) : (
                 history.map((h) => (
-                  <button
-                    key={h.id}
-                    onClick={() => {
-                      setViewingTx(h);
-                      setShowHistory(false);
-                    }}
-                    className="w-full text-left py-2.5 hover:bg-[#F7F5EE] rounded-md px-2 -mx-2"
-                  >
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">Struk #{String(h.no_struk).padStart(4, "0")}</span>
-                      <span className="font-bold font-mono">{rupiah(h.total)}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-[#8B8680]">
-                      <span>{new Date(h.created_at).toLocaleString("id-ID")}</span>
-                      <span>
-                        {h.metode_bayar === "tunai" ? "Tunai" : "QRIS"} · {h.items.length} produk
-                      </span>
-                    </div>
-                  </button>
+                  <div key={h.id} className="py-2.5">
+                    <button
+                      onClick={() => {
+                        setViewingTx(h);
+                        setShowHistory(false);
+                      }}
+                      className="w-full text-left hover:bg-[#F7F5EE] rounded-md px-2 -mx-2 py-1"
+                    >
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium flex items-center gap-1.5">
+                          Struk #{String(h.no_struk).padStart(4, "0")}
+                          {h.status === "dp" && (
+                            <span className="text-[9px] font-bold bg-[#FBEEDB] text-[#B4790C] px-1.5 py-0.5 rounded">
+                              DP
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-bold font-mono">{rupiah(h.total)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-[#8B8680]">
+                        <span>{new Date(h.created_at).toLocaleString("id-ID")}</span>
+                        <span>
+                          {h.metode_bayar === "tunai" ? "Tunai" : "QRIS"} · {h.items.length} produk
+                        </span>
+                      </div>
+                    </button>
+                    {h.status === "dp" && (
+                      <div className="flex items-center justify-between mt-1 px-2 -mx-2">
+                        <span className="text-xs text-[#C1443A]">Sisa: {rupiah(h.sisa_bayar)}</span>
+                        <button
+                          onClick={() => openSettle(h)}
+                          className="text-xs font-semibold bg-[#1F3D34] text-white px-2.5 py-1 rounded-md hover:brightness-110"
+                        >
+                          Lunasi
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))
               )}
             </div>
